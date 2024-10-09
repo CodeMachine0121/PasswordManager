@@ -1,0 +1,3 @@
+[submodule "PasswordManager-Backend"]
+	path = PasswordManager-Backend
+	url = https://github.com/CodeMachine0121/PasswordManager-Backend
