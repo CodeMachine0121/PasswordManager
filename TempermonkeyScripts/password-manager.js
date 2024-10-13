@@ -14,7 +14,8 @@
     'use strict';
 
     let apiData = [];
-    const backendUri = 'http://localhost:8080/api/PasswordRecord';
+    let vaultUnsealedStatus = false;
+    const backendUri = 'http://localhost:5210/api';
 
     // 样式对象
     const styles = {
@@ -55,20 +56,35 @@
         `
     };
 
+    
     function detectPasswordFields() {
         const passwordFields = document.querySelectorAll('input[type="password"]');
         const usernameFields = document.querySelectorAll('input[type="text"], input[type="email"]');
-
+    
         if (passwordFields.length > 0 && usernameFields.length > 0) {
             console.log('檢測到帳號密碼輸入框!');
             const usernameField = usernameFields[0];
             const passwordField = passwordFields[0];
-
+    
             usernameField.style.border = '2px solid blue';
             passwordField.style.border = '2px solid red';
-
-            fetchPasswordRecord();
+    
+            // 首先插入图标
             insertIcon(usernameField, passwordField);
+    
+            // 然后获取 Vault 状态和密码记录
+            fetchVaultSealStatus()
+                .then(() => {
+                    if (!vaultUnsealedStatus) {
+                        console.log('Vault is sealed. Password records will not be fetched.');
+                        return Promise.resolve([]); // 返回一个解析为空数组的 Promise
+                    }
+                    return fetchPasswordRecord();
+                })
+                .catch(error => {
+                    console.error('Error in initialization:', error);
+                    // 即使出错，我们也不移除图标，因为用户可能想要手动解封 Vault
+                });
         }
     }
 
@@ -77,19 +93,59 @@
         icon.innerHTML = '🔑';
         icon.style.cssText = 'cursor: pointer; margin-left: 5px;';
         icon.title = '查看已儲存帳密';
-
+    
         icon.onclick = () => {
-            if (apiData.length > 0) {
-                console.log('show password record');
-                showPopup(apiData, usernameField, passwordField);
+            if (!vaultUnsealedStatus) {
+                showVaultKeyInput(usernameField, passwordField);
             } else {
-                console.log('no found records');
-                alert('沒有紀錄，你可以新增一個');
-                showCreateForm(null, usernameField, passwordField);
+                if (apiData.length > 0) {
+                    showPopup(apiData, usernameField, passwordField);
+                } else {
+                    alert('沒有紀錄，你可以新增一個');
+                    showCreateForm(null, usernameField, passwordField);
+                }
             }
         };
         usernameField.parentNode.insertBefore(icon, usernameField.nextSibling);
     }
+
+
+   
+    function showVaultKeyInput(usernameField, passwordField) {
+        const popup = document.createElement('div');
+        popup.style.cssText = styles.popup;
+        popup.id = 'vault-key-input';
+    
+        popup.innerHTML = `
+            <h2>輸入Vault Unsealed Key</h2>
+            <input type="password" id="vaultKey" style="${styles.input}" placeholder="輸入你的Vault Unsealed Key">
+            <button id="submitVaultKey" style="${styles.button}">提交</button>
+        `;
+    
+        const submitButton = popup.querySelector('#submitVaultKey');
+        submitButton.onclick = () => {
+            const keyInput = popup.querySelector('#vaultKey');
+            requestUnsealVault(keyInput.value)
+                .then(success => {
+                    if (success) {
+                        return fetchPasswordRecord();
+                    } else {
+                        throw new Error('Key is not correct');
+                    }
+                })
+                .then(() => {
+                    document.body.removeChild(popup);
+                    showPopup(apiData, usernameField, passwordField);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(error.message || 'An error occurred. Please try again.');
+                });
+        };
+    
+        document.body.appendChild(popup);
+    }
+
 
     function showPopup(data, usernameField, passwordField) {
         const popup = document.createElement('div');
@@ -217,7 +273,7 @@
     function createCredential(newPasswordRecord, popup, usernameField, passwordField) {
         GM.xmlHttpRequest({
             method: 'POST',
-            url: `${backendUri}/domain/${newPasswordRecord.domainName}`,
+            url: `${backendUri}/PasswordRecord/domain/${newPasswordRecord.domainName}`,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -247,32 +303,36 @@
     }
 
     function fetchPasswordRecord() {
-        GM.xmlHttpRequest({
-            method: 'GET',
-            url: `${backendUri}/domain/${window.location.hostname}`,
-            onload: function(response) {
-                if (response.status >= 200 && response.status < 300) {
-                    const data = JSON.parse(response.responseText);
-                    console.log('API get，data：', data);
-                    apiData = data.data;
-                } else {
-                    console.error('API get fail:', response.statusText);
+        return new Promise((resolve, reject) => {
+            GM.xmlHttpRequest({
+                method: 'GET',
+                url: `${backendUri}/PasswordRecord/domain/${window.location.hostname}`,
+                onload: function(response) {
+                    if (response.status >= 200 && response.status < 300) {
+                        const data = JSON.parse(response.responseText);
+                        console.log('API get，data：', data);
+                        apiData = data.data;
+                        resolve(apiData);
+                    } else {
+                        console.error('API get fail:', response.statusText);
+                        apiData = [];
+                        reject(new Error(`紀錄取得失敗: ${response.statusText}`));
+                    }
+                },
+                onerror: function(error) {
+                    console.error('API get fail', error);
                     apiData = [];
-                    alert(`紀錄取得失敗: ${response.statusText}`);
+                    reject(new Error(`紀錄取得失敗: ${error.toString()}`));
                 }
-            },
-            onerror: function(error) {
-                console.error('API get fail', error);
-                apiData = [];
-                alert(`紀錄取得失敗: ${error.toString()}`);
-            }
+            });
         });
     }
+    
 
     function deleteCredential(selectedPasswordRecord, index, popup, usernameField, passwordField) {
         GM.xmlHttpRequest({
             method: 'DELETE',
-            url: `${backendUri}/domain/${selectedPasswordRecord.domainName}/account/${selectedPasswordRecord.accountName}`,
+            url: `${backendUri}/PasswordRecord/domain/${selectedPasswordRecord.domainName}/account/${selectedPasswordRecord.accountName}`,
             onload: function(response) {
                 if (response.status >= 200 && response.status < 300) {
                     console.log('删除成功');
@@ -289,6 +349,64 @@
                 console.error('刪除失敗:', error);
                 alert(`删除失败: ${error.toString()}`);
             }
+        });
+    }
+
+    function fetchVaultSealStatus() {
+        return new Promise((resolve, reject) => {
+            GM.xmlHttpRequest({
+                method: 'GET',
+                url: `${backendUri}/Vault/seal/status`,
+                onload: function(response) {
+                    if (response.status >= 200 && response.status < 300) {
+                        const data = JSON.parse(response.responseText);
+                        console.log('vault sealed status', data);
+                        vaultUnsealedStatus = !data.data.sealed;
+                        console.log('vaultUnsealedStatus:', vaultUnsealedStatus);
+                        resolve(vaultUnsealedStatus);
+                    } else {
+                        console.error('API get fail:', response.statusText);
+                        vaultUnsealedStatus = false;
+                        reject(new Error(`获取Vault状态失败: ${response.statusText}`));
+                    }
+                },
+                onerror: function(error) {
+                    console.error('API get fail', error);
+                    vaultUnsealedStatus = false;
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    function requestUnsealVault(vaultKey) {
+        return new Promise((resolve, reject) => {
+            GM.xmlHttpRequest({
+                method: 'POST',
+                url: `${backendUri}/Vault/seal/unseal`,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                data: JSON.stringify({
+                    key: vaultKey
+                }),
+                onload: function(response) {
+                    if (response.status >= 200 && response.status < 300) {
+                        console.log('vault key send success:', response.responseText);
+                        vaultUnsealedStatus = true;
+                        resolve(true);
+                    } else {
+                        console.error('vault key send fail:', response.statusText);
+                        vaultUnsealedStatus = false;
+                        resolve(false);
+                    }
+                },
+                onerror: function(error) {
+                    console.error('error when send vault key: ', error);
+                    vaultUnsealedStatus = false;
+                    reject(error);
+                }
+            });
         });
     }
 
