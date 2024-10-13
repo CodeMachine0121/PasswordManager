@@ -1,4 +1,16 @@
+// ==UserScript==
+// @name         Password Manager
+// @namespace    http://tampermonkey.net/
+// @version      2024-10-19
+// @description  Password management with improved UX and inline button creation
+// @author       You
+// @match        *://*/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=claude.ai
+// @grant        GM.xmlHttpRequest
+// @grant        GM_xmlhttpRequest
+// ==/UserScript==
 
+const passwordManager = (function() {
     let apiData = [];
     let vaultUnsealedStatus = false;
     const backendUri = 'http://localhost:5210/api';
@@ -395,3 +407,9 @@
             });
         });
     }
+
+})();
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = passwordManager;
+}
