@@ -1,17 +1,3 @@
-// ==UserScript==
-// @name         Password Manager
-// @namespace    http://tampermonkey.net/
-// @version      2024-10-19
-// @description  Password management with improved UX and inline button creation
-// @author       You
-// @match        *://*/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=claude.ai
-// @grant        GM.xmlHttpRequest
-// @grant        GM_xmlhttpRequest
-// ==/UserScript==
-
-(function() {
-    'use strict';
 
     let apiData = [];
     let vaultUnsealedStatus = false;
@@ -56,22 +42,22 @@
         `
     };
 
-    
+
     function detectPasswordFields() {
         const passwordFields = document.querySelectorAll('input[type="password"]');
         const usernameFields = document.querySelectorAll('input[type="text"], input[type="email"]');
-    
+
         if (passwordFields.length > 0 && usernameFields.length > 0) {
             console.log('檢測到帳號密碼輸入框!');
             const usernameField = usernameFields[0];
             const passwordField = passwordFields[0];
-    
+
             usernameField.style.border = '2px solid blue';
             passwordField.style.border = '2px solid red';
-    
+
             // 首先插入图标
             insertIcon(usernameField, passwordField);
-    
+
             // 然后获取 Vault 状态和密码记录
             fetchVaultSealStatus()
                 .then(() => {
@@ -93,7 +79,7 @@
         icon.innerHTML = '🔑';
         icon.style.cssText = 'cursor: pointer; margin-left: 5px;';
         icon.title = '查看已儲存帳密';
-    
+
         icon.onclick = () => {
             if (!vaultUnsealedStatus) {
                 showVaultKeyInput(usernameField, passwordField);
@@ -110,18 +96,18 @@
     }
 
 
-   
+
     function showVaultKeyInput(usernameField, passwordField) {
         const popup = document.createElement('div');
         popup.style.cssText = styles.popup;
         popup.id = 'vault-key-input';
-    
+
         popup.innerHTML = `
             <h2>輸入Vault Unsealed Key</h2>
             <input type="password" id="vaultKey" style="${styles.input}" placeholder="輸入你的Vault Unsealed Key">
             <button id="submitVaultKey" style="${styles.button}">提交</button>
         `;
-    
+
         const submitButton = popup.querySelector('#submitVaultKey');
         submitButton.onclick = () => {
             const keyInput = popup.querySelector('#vaultKey');
@@ -142,7 +128,7 @@
                     alert(error.message || 'An error occurred. Please try again.');
                 });
         };
-    
+
         document.body.appendChild(popup);
     }
 
@@ -327,7 +313,7 @@
             });
         });
     }
-    
+
 
     function deleteCredential(selectedPasswordRecord, index, popup, usernameField, passwordField) {
         GM.xmlHttpRequest({
@@ -409,6 +395,3 @@
             });
         });
     }
-
-    window.addEventListener('load', detectPasswordFields);
-})();
