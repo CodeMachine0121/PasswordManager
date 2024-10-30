@@ -10,10 +10,12 @@
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
-const passwordManager = (function() {
+(function() {
+    'use strict';
+
     let apiData = [];
     let vaultUnsealedStatus = false;
-    const backendUri = 'http://localhost:5210/api';
+    const backendUri = 'http://localhost:8080/api';
 
     // 样式对象
     const styles = {
@@ -408,8 +410,5 @@ const passwordManager = (function() {
         });
     }
 
+    window.addEventListener('load', detectPasswordFields);
 })();
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = passwordManager;
-}
